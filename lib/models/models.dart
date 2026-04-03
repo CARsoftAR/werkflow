@@ -42,6 +42,7 @@ class Cita {
   final DateTime fechaHora;
   final String estado; // Pendiente, Atendida, Cancelada
   final bool recordatorioActivo;
+  final String? sonido;
 
   Cita({
     this.id,
@@ -49,6 +50,7 @@ class Cita {
     required this.fechaHora,
     required this.estado,
     this.recordatorioActivo = true,
+    this.sonido,
   });
 
   Map<String, dynamic> toMap() {
@@ -58,6 +60,7 @@ class Cita {
       'fecha_hora': fechaHora.toIso8601String(),
       'estado': estado,
       'recordatorio_activo': recordatorioActivo ? 1 : 0,
+      'sonido': sonido,
     };
   }
 
@@ -68,6 +71,7 @@ class Cita {
       fechaHora: DateTime.parse(map['fecha_hora']),
       estado: map['estado'],
       recordatorioActivo: map['recordatorio_activo'] == 1,
+      sonido: map['sonido'],
     );
   }
 }
@@ -153,6 +157,54 @@ class Presupuesto {
       totalManoObra: (map['total_mano_obra'] as num?)?.toDouble() ?? 0.0,
       totalGeneral: (map['total_general'] as num?)?.toDouble() ?? 0.0,
       items: items,
+    );
+  }
+}
+
+class BusinessInfo {
+  final String name;
+  final String phone;
+  final String email;
+  final String website;
+  final String address;
+  final String footerTitle;
+  final String footerText;
+  final String? headerImagePath;
+
+  BusinessInfo({
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.website,
+    required this.address,
+    required this.footerTitle,
+    required this.footerText,
+    this.headerImagePath,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'phone': phone,
+      'email': email,
+      'website': website,
+      'address': address,
+      'footerTitle': footerTitle,
+      'footerText': footerText,
+      'headerImagePath': headerImagePath,
+    };
+  }
+
+  factory BusinessInfo.fromJson(Map<String, dynamic> map) {
+    return BusinessInfo(
+      name: map['name'] ?? '',
+      phone: map['phone'] ?? '',
+      email: map['email'] ?? '',
+      website: map['website'] ?? '',
+      address: map['address'] ?? '',
+      footerTitle: map['footerTitle'] ?? 'Términos & y condiciones',
+      footerText: map['footerText'] ?? '',
+      headerImagePath: map['headerImagePath'],
     );
   }
 }

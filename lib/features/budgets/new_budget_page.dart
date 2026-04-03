@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/client_provider.dart';
 import '../clients/new_client_page.dart';
+import '../../core/services/pdf_service.dart';
+import '../../providers/business_provider.dart';
 
 class NewBudgetPage extends StatefulWidget {
   final Presupuesto? budget;
@@ -49,6 +51,36 @@ class _NewBudgetPageState extends State<NewBudgetPage> {
         title: Text(
           widget.budget == null ? 'NUEVO PRESUPUESTO' : 'EDITAR PRESUPUESTO'
         ),
+        actions: [
+          if (widget.budget != null || _items.isNotEmpty)
+            IconButton(
+              onPressed: () async {
+                final business = context.read<BusinessProvider>().businessInfo;
+                final clients = context.read<ClientProvider>().clients;
+                
+                if (clients.isEmpty || _selectedClientId == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Seleccioná un cliente para el PDF')),
+                  );
+                  return;
+                }
+                
+                final client = clients.firstWhere((c) => c.id == _selectedClientId, orElse: () => clients.first);
+                
+                final tempBudget = Presupuesto(
+                  id: widget.budget?.id,
+                  clienteId: _selectedClientId ?? 0,
+                  fecha: widget.budget?.fecha ?? DateTime.now(),
+                  estado: _selectedStatus,
+                  totalGeneral: totalGeneral,
+                  items: _items,
+                );
+                
+                await PdfService.generateAndPrintBudget(tempBudget, client, business);
+              },
+              icon: const Icon(Icons.picture_as_pdf_rounded, color: AppColors.primary),
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -174,18 +206,25 @@ class _NewBudgetPageState extends State<NewBudgetPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item.descripcion, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text('${item.cantidad} x \$${item.precioUnitario}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                      Text(
+                        item.descripcion, 
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text('${item.cantidad} x \$${item.precioUnitario.toStringAsFixed(2)}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('\$${item.subtotal}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                    Text('\$${item.subtotal.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                     Text('Editar', style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold)),
                   ],
                 ),
+
               ],
             ),
           ),
@@ -295,12 +334,12 @@ class _NewBudgetPageState extends State<NewBudgetPage> {
     return GlassCard(
       padding: const EdgeInsets.all(24),
       borderRadius: BorderRadius.circular(28),
-      backgroundColor: Colors.white.withOpacity(0.9),
+      backgroundColor: Colors.white.withOpacity(0.95),
       child: Column(
         children: [
-          _buildSummaryRow('Materiales + Mano de Obra', '\$ $totalMateriales'),
+          _buildSummaryRow('Materiales + Mano de Obra', '\$ ${totalMateriales.toStringAsFixed(2)}'),
           const Divider(height: 24),
-          _buildSummaryRow('TOTAL ESTIMADO', '\$ $totalGeneral', isBold: true),
+          _buildSummaryRow('TOTAL ESTIMADO', '\$ ${totalGeneral.toStringAsFixed(2)}', isBold: true),
         ],
       ),
     );
@@ -308,13 +347,31 @@ class _NewBudgetPageState extends State<NewBudgetPage> {
 
   Widget _buildSummaryRow(String label, String value, {bool isBold = false}) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(fontWeight: isBold ? FontWeight.w900 : FontWeight.bold, fontSize: isBold ? 14 : 12, color: isBold ? Colors.black : Colors.grey)),
-        Text(value, style: TextStyle(fontWeight: FontWeight.w900, fontSize: isBold ? 20 : 16, color: isBold ? AppColors.primary : Colors.black)),
+        Expanded(
+          child: Text(
+            label, 
+            style: TextStyle(
+              fontWeight: isBold ? FontWeight.w900 : FontWeight.bold, 
+              fontSize: isBold ? 14 : 12, 
+              color: isBold ? Colors.black : Colors.grey,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Text(
+          value, 
+          style: TextStyle(
+            fontWeight: FontWeight.w900, 
+            fontSize: isBold ? 20 : 16, 
+            color: isBold ? AppColors.primary : Colors.black,
+          ),
+        ),
       ],
     );
   }
+
 
   Widget _buildSaveButton(BuildContext context) {
     return ElevatedButton(

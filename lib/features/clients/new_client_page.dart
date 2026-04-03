@@ -86,13 +86,14 @@ class _NewClientPageState extends State<NewClientPage> {
   }
 
   Widget _buildSectionHeader(String title) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Text(
       title,
       style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w900,
         letterSpacing: 2,
-        color: Colors.grey.shade600,
+        color: colorScheme.primary.withOpacity(0.5), // Consistent with Dashboard
       ),
     );
   }
@@ -154,11 +155,12 @@ class _NewClientPageState extends State<NewClientPage> {
         }
       },
       style: ElevatedButton.styleFrom(
-        minimumSize: const Size(double.infinity, 64),
+        minimumSize: const Size(double.infinity, 56), // Slightly smaller
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        elevation: 0,
+        elevation: 8, // Added elevation for depth
+        shadowColor: AppColors.primary.withOpacity(0.4),
       ),
       child: Text(
         widget.client == null ? 'REGISTRAR CLIENTE' : 'ACTUALIZAR DATOS', 

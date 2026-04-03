@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'dart:async';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -7,26 +8,42 @@ class DatabaseService {
   DatabaseService._internal();
 
   static Database? _database;
+  Completer<Database>? _dbCompleter;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDatabase();
-    return _database!;
+    if (_dbCompleter != null) return _dbCompleter!.future;
+    
+    _dbCompleter = Completer<Database>();
+    try {
+      _database = await _initDatabase();
+      _dbCompleter!.complete(_database);
+      return _database!;
+    } catch (e) {
+      _dbCompleter!.completeError(e);
+      _dbCompleter = null;
+      rethrow;
+    }
   }
 
   Future<Database> _initDatabase() async {
     String path = join(await getDatabasesPath(), 'strom.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: (db, oldVersion, newVersion) async {
-        // Refreshing schema for the new architecture
-        await db.execute('DROP TABLE IF EXISTS items_presupuesto');
-        await db.execute('DROP TABLE IF EXISTS presupuestos');
-        await db.execute('DROP TABLE IF EXISTS citas');
-        await db.execute('DROP TABLE IF EXISTS clientes');
-        await _onCreate(db, newVersion);
+        if (oldVersion < 2) {
+          // Recreate everything for v2 architecture
+          await db.execute('DROP TABLE IF EXISTS items_presupuesto');
+          await db.execute('DROP TABLE IF EXISTS presupuestos');
+          await db.execute('DROP TABLE IF EXISTS citas');
+          await db.execute('DROP TABLE IF EXISTS clientes');
+          await _onCreate(db, newVersion);
+        } else if (oldVersion == 2) {
+          // Add 'sonido' column for v3
+          await db.execute('ALTER TABLE citas ADD COLUMN sonido TEXT');
+        }
       },
     );
   }
@@ -51,6 +68,7 @@ class DatabaseService {
         fecha_hora TEXT NOT NULL,
         estado TEXT NOT NULL,
         recordatorio_activo INTEGER DEFAULT 1,
+        sonido TEXT,
         FOREIGN KEY (cliente_id) REFERENCES clientes (id) ON DELETE CASCADE
       )
     ''');

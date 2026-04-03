@@ -6,6 +6,9 @@ import '../../models/models.dart';
 import '../../core/widgets/glass_card.dart';
 import '../../core/theme/app_theme.dart';
 import 'new_budget_page.dart';
+import '../settings/business_settings_page.dart';
+import '../../core/services/pdf_service.dart';
+import '../../providers/business_provider.dart';
 
 class BudgetsListPage extends StatefulWidget {
   const BudgetsListPage({super.key});
@@ -35,6 +38,16 @@ class _BudgetsListPageState extends State<BudgetsListPage> {
           'PRESUPUESTOS',
           style: TextStyle(fontWeight: FontWeight.w900, fontSize: 26, letterSpacing: -1.5),
         ),
+        actions: [
+          IconButton(
+            onPressed: () => Navigator.push(
+              context, 
+              MaterialPageRoute(builder: (context) => const BusinessSettingsPage())
+            ),
+            icon: const Icon(Icons.settings_suggest_rounded, color: AppColors.primary),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Column(
         children: [
@@ -154,18 +167,32 @@ class _BudgetsListPageState extends State<BudgetsListPage> {
         },
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.03),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(32),
-            border: Border.all(color: Colors.white.withOpacity(0.05)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: InkWell(
-            onTap: () => Navigator.push(
-              context, 
-              MaterialPageRoute(builder: (context) => NewBudgetPage(budget: budget))
-            ),
+            onTap: () {
+              try {
+                Navigator.push(
+                  context, 
+                  MaterialPageRoute(builder: (context) => NewBudgetPage(budget: budget))
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('No pudimos abrir el presupuesto: $e')),
+                );
+              }
+            },
             borderRadius: BorderRadius.circular(32),
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -185,27 +212,27 @@ class _BudgetsListPageState extends State<BudgetsListPage> {
                       ),
                       Text(
                         '${budget.fecha.day}/${budget.fecha.month}/${budget.fecha.year}',
-                        style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.3), fontWeight: FontWeight.bold),
+                        style: TextStyle(fontSize: 12, color: AppColors.textDark.withOpacity(0.3), fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   Text(
                     budget.items.isNotEmpty ? budget.items.first.descripcion : 'Trabajo Técnico',
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: -0.5),
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: -0.5, color: AppColors.textDark),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Row(
                     children: [
-                      Icon(Icons.person_rounded, size: 14, color: Colors.white.withOpacity(0.3)),
+                      Icon(Icons.person_rounded, size: 14, color: AppColors.textDark.withOpacity(0.3)),
                       const SizedBox(width: 6),
                       Text(
                         clientName,
-                        style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: AppColors.textDark.withOpacity(0.4), fontSize: 14, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -215,21 +242,47 @@ class _BudgetsListPageState extends State<BudgetsListPage> {
                         children: [
                           Text(
                             'TOTAL', 
-                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white.withOpacity(0.2))
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: AppColors.textDark.withOpacity(0.3))
                           ),
                           Text(
                             '\$ ${budget.totalGeneral.toStringAsFixed(0)}',
-                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 28, color: Colors.white),
+                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 32, color: AppColors.primary),
                           ),
                         ],
                       ),
+                      const Spacer(),
+                       IconButton(
+                        onPressed: () async {
+                          final business = context.read<BusinessProvider>().businessInfo;
+                          if (client != null) {
+                            showDialog(
+                              context: context, 
+                              barrierDismissible: false,
+                              builder: (context) => const Center(child: CircularProgressIndicator())
+                            );
+                            try {
+                              await PdfService.generateAndPrintBudget(budget, client, business);
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                                );
+                              }
+                            } finally {
+                              if (mounted) Navigator.pop(context);
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.picture_as_pdf_outlined, color: AppColors.primary),
+                      ),
+                      const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
+                          color: AppColors.textDark.withOpacity(0.05),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.white.withOpacity(0.3)),
+                        child: Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textDark.withOpacity(0.3)),
                       ),
                     ],
                   ),

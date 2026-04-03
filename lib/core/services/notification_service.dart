@@ -1,82 +1,196 @@
+import 'dart:convert';
+import 'dart:ui';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/timezone.dart' as tz;
+import 'package:flutter/services.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:alarm/alarm.dart';
 import '../../models/models.dart';
 
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse notificationResponse) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  if (notificationResponse.payload != null) {
+    try {
+      final Map<String, dynamic> data = jsonDecode(notificationResponse.payload!);
+      final int id = data['id'];
+      final String nombre = data['nombre'];
+      final String soundPath = data['finalPath'];
+
+      await Alarm.init();
+      await Alarm.stop(id);
+
+      int minutes = 0;
+      switch (notificationResponse.actionId) {
+        case 'snooze_15': minutes = 15; break;
+        case 'snooze_30': minutes = 30; break;
+        case 'snooze_45': minutes = 45; break;
+        case 'snooze_60': minutes = 60; break;
+      }
+
+      if (minutes > 0) {
+        final snoozeTime = DateTime.now().add(Duration(minutes: minutes));
+        final alarmSettings = AlarmSettings(
+          id: id,
+          dateTime: snoozeTime,
+          assetAudioPath: soundPath,
+          loopAudio: true,
+          vibrate: true,
+          volumeSettings: const VolumeSettings.fixed(volume: 1.0),
+          notificationSettings: NotificationSettings(
+            title: 'ALERTA POSPUESTA ($minutes min)',
+            body: 'Cliente: $nombre. Tocar para opciones.',
+            stopButton: 'APAGAR',
+            icon: 'ic_launcher',
+          ),
+        );
+        await Alarm.set(alarmSettings: alarmSettings);
+      }
+    } catch (e) {
+      debugPrint("NOTIFICATION_BACKGROUND_ERROR: $e");
+    }
+  }
+}
+
 class NotificationService {
-  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+  static final NotificationService _notificationService = NotificationService._internal();
+  factory NotificationService() => _notificationService;
+  NotificationService._internal();
+
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
   Future<void> init() async {
-    // 1. Initialize timezone data
-    tz.initializeTimeZones();
-    // Setting to Argentina timezone as a stable fallback for now
-    tz.setLocalLocation(tz.getLocation('America/Argentina/Buenos_Aires')); 
+    try {
+      tz.initializeTimeZones();
+      try {
+        final timezoneInfo = await FlutterTimezone.getLocalTimezone();
+        tz.setLocalLocation(tz.getLocation(timezoneInfo.toString()));
+      } catch (_) {}
 
-    // 2. Android initialization settings
-    const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      await Alarm.init();
 
-    // 3. iOS initialization settings
-    const DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    // 4. Combined settings
-    const InitializationSettings settings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
+      const InitializationSettings initializationSettings = InitializationSettings(
+        android: initializationSettingsAndroid,
+      );
 
-    // 5. Initialize the plugin
-    await _notificationsPlugin.initialize(
-      settings: settings,
-      onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // Handle notification tap if needed
-      },
-    );
+      await flutterLocalNotificationsPlugin.initialize(
+        settings: initializationSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse response) {
+          // Foreground
+        },
+        onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+      );
+      
+      const AndroidNotificationChannel channel = AndroidNotificationChannel(
+        'werkflow_snooze_channel_v4',
+        'Citas con Posponer',
+        description: 'Muestra opciones de tiempo para las alertas',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+      );
 
-    // 6. Request permissions for Android 13+
-    await _notificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+      await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(channel);
+
+    } catch (e) {
+      debugPrint("NOTIFICATION_INIT_ERROR: $e");
+    }
   }
 
   Future<void> scheduleCitaNotification(Cita cita, Cliente? cliente) async {
-    // Prevent scheduling if date is in the past
-    if (cita.fechaHora.isBefore(DateTime.now())) return;
+    if (cita.id == null) return;
 
-    final scheduleTime = tz.TZDateTime.from(cita.fechaHora, tz.local);
+    final now = DateTime.now();
+    var scheduledDateTime = cita.fechaHora;
+    
+    if (scheduledDateTime.isBefore(now)) {
+      if (now.difference(scheduledDateTime).inMinutes < 5) {
+        scheduledDateTime = now.add(const Duration(seconds: 10));
+      } else {
+        return; 
+      }
+    }
 
-    await _notificationsPlugin.zonedSchedule(
-      id: cita.id ?? 999,
-      title: '¡URGENTE: VISITA PROGRAMADA!',
-      body: 'Tienes una visita ahora con ${cliente?.nombre ?? "un cliente"}.',
-      scheduledDate: scheduleTime,
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'werkflow_alarms_v3', 
-          'Alarmas Críticas',
-          channelDescription: 'Canal para alarmas que deben sonar incluso en silencio',
-          importance: Importance.max,
-          priority: Priority.high,
-          fullScreenIntent: true,
-          audioAttributesUsage: AudioAttributesUsage.alarm,
-          category: AndroidNotificationCategory.alarm,
-          playSound: true,
-          enableVibration: true,
+    String? soundPath = (cita.sonido != null && cita.sonido!.isNotEmpty) 
+        ? cita.sonido! 
+        : 'assets/alarma_1.mp3';
+        
+    try {
+      const platform = MethodChannel('com.werkflow.alarms/sounds');
+      final String? preparedPath = await platform.invokeMethod('prepareAlarmPath', {'uri': soundPath});
+      final finalSoundPath = preparedPath ?? 'assets/alarma_1.mp3';
+
+      final String nombreCliente = cliente?.nombre ?? 'Cliente';
+      
+      final payload = jsonEncode({
+        'id': cita.id,
+        'nombre': nombreCliente,
+        'finalPath': finalSoundPath,
+      });
+
+      final tzTime = tz.TZDateTime.from(scheduledDateTime, tz.local);
+      
+      // Notificación con acciones Y Full Screen Intent
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        id: cita.id!,
+        title: 'CITA CON: $nombreCliente',
+        body: 'Seleccione tiempo para posponer:',
+        scheduledDate: tzTime,
+        payload: payload,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            'werkflow_snooze_channel_v4',
+            'Citas con Posponer',
+            importance: Importance.max,
+            priority: Priority.max,
+            fullScreenIntent: true, // Esto hará que la app se abra
+            ticker: 'Alerta de Cita',
+            styleInformation: BigTextStyleInformation(''),
+            actions: <AndroidNotificationAction>[
+              const AndroidNotificationAction('snooze_15', '15m', titleColor: Color(0xFF2196F3)),
+              const AndroidNotificationAction('snooze_30', '30m', titleColor: Color(0xFF2196F3)),
+              const AndroidNotificationAction('snooze_45', '45m', titleColor: Color(0xFF2196F3)),
+              const AndroidNotificationAction('snooze_60', '1h', titleColor: Color(0xFF2196F3)),
+              const AndroidNotificationAction('dismiss_action', 'APAGAR', titleColor: Color(0xFFFF5252)),
+            ],
+          ),
         ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+
+      final alarmSettings = AlarmSettings(
+        id: cita.id!,
+        dateTime: scheduledDateTime,
+        assetAudioPath: finalSoundPath, 
+        loopAudio: true,
+        vibrate: true,
+        volumeSettings: const VolumeSettings.fixed(volume: 1.0),
+        notificationSettings: NotificationSettings(
+          title: '¡ALERTA DE CITA!',
+          body: 'Cliente: $nombreCliente. Toque para ver opciones.',
+          stopButton: 'POSPONER', // Cambiamos el texto para invitar a tocar
+          icon: 'ic_launcher',
         ),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-    );
+      );
+
+      await Alarm.set(alarmSettings: alarmSettings);
+    } catch (e) {
+      debugPrint("ALARM_PLANIFICADA_ERROR: $e");
+    }
   }
 
   Future<void> cancelCitaNotification(int citaId) async {
-    await _notificationsPlugin.cancel(id: citaId);
+    await flutterLocalNotificationsPlugin.cancel(id: citaId);
+    await Alarm.stop(citaId);
   }
 }

@@ -22,7 +22,24 @@ class BudgetProvider extends ChangeNotifier {
   }
 
   int get pendingBudgetsCount {
-    return _budgets.where((b) => b.estado == 'Aprobado' || b.estado == 'Enviado').length;
+    return _budgets.where((b) => b.estado == 'Enviado').length;
+  }
+
+  int get approvedBudgetsCount {
+    return _budgets.where((b) => b.estado == 'Aprobado').length;
+  }
+
+  int get completedBudgetsCount {
+    return _budgets.where((b) => b.estado == 'Terminada').length;
+  }
+
+  double get totalProjectedIncome => realIncome + projectedIncome;
+
+  double get conversionRate {
+    final finalCount = _budgets.where((b) => ['Aprobado', 'Terminada', 'Cancelada'].contains(b.estado)).length;
+    if (finalCount == 0) return 0;
+    final approvedCount = _budgets.where((b) => ['Aprobado', 'Terminada'].contains(b.estado)).length;
+    return (approvedCount / finalCount) * 100;
   }
 
   bool get hasApproved => _budgets.any((b) => b.estado == 'Aprobado');

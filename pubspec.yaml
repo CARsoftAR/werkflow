@@ -44,6 +44,11 @@ dependencies:
   intl: ^0.20.2
   get_it: ^9.2.1
   timezone: ^0.11.0
+  alarm: ^5.2.1
+  flutter_timezone: ^5.0.1
+  shared_preferences: ^2.5.5
+  image_picker: ^1.2.1
+
 
 dev_dependencies:
   flutter_test:
@@ -66,6 +71,11 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/alarma_1.mp3
+    - assets/gatito.mp3
+    - assets/images/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

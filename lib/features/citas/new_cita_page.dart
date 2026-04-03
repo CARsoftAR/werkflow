@@ -6,6 +6,7 @@ import '../../models/models.dart';
 import '../../core/widgets/glass_card.dart';
 import '../../core/theme/app_theme.dart';
 import '../clients/new_client_page.dart';
+import 'package:flutter/services.dart';
 
 class NewCitaPage extends StatefulWidget {
   final Cita? cita;
@@ -20,6 +21,13 @@ class _NewCitaPageState extends State<NewCitaPage> {
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
   String _estado = 'Pendiente';
+  String _selectedSonido = 'assets/alarma_1.mp3';
+
+  final List<Map<String, String>> _sonidosDisponibles = [
+    {'nombre': 'Classic (App)', 'path': 'assets/alarma_1.mp3'},
+    {'nombre': 'Gatito (App)', 'path': 'assets/gatito.mp3'},
+    {'nombre': 'Predeterminado (Sistema)', 'path': 'default'},
+  ];
 
   @override
   void initState() {
@@ -29,6 +37,39 @@ class _NewCitaPageState extends State<NewCitaPage> {
       _selectedDate = widget.cita!.fechaHora;
       _selectedTime = TimeOfDay.fromDateTime(widget.cita!.fechaHora);
       _estado = widget.cita!.estado;
+      _selectedSonido = widget.cita!.sonido ?? 'assets/alarma_1.mp3';
+      
+      // Asegurarse de que el sonido guardado esté en la lista para evitar errores del Dropdown
+      bool exists = _sonidosDisponibles.any((s) => s['path'] == _selectedSonido);
+      if (!exists) {
+        _sonidosDisponibles.add({
+          'nombre': 'Sonido guardado',
+          'path': _selectedSonido,
+        });
+      }
+    }
+    _loadSystemSounds();
+  }
+
+  static const platform = MethodChannel('com.werkflow.alarms/sounds');
+
+  Future<void> _loadSystemSounds() async {
+    try {
+      final List<dynamic>? result = await platform.invokeMethod('getSystemAlarms');
+      if (mounted && result != null && result.isNotEmpty) {
+        setState(() {
+          for (var r in result) {
+            try {
+              final map = Map<String, String>.from(r as Map);
+              if (!_sonidosDisponibles.any((s) => s['path'] == map['path'])) {
+                _sonidosDisponibles.add(map);
+              }
+            } catch (_) {}
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading system sounds: $e");
     }
   }
 
@@ -83,6 +124,8 @@ class _NewCitaPageState extends State<NewCitaPage> {
                    _buildDatePickerRow(context),
                    const Divider(height: 1),
                    _buildTimePickerRow(context),
+                   const Divider(height: 1),
+                   _buildSoundPickerRow(context),
                 ],
               ),
             ),
@@ -99,13 +142,14 @@ class _NewCitaPageState extends State<NewCitaPage> {
   }
 
   Widget _buildSectionHeader(String title) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Text(
       title,
       style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w900,
         letterSpacing: 2,
-        color: Colors.grey.shade600,
+        color: colorScheme.primary.withOpacity(0.5), // Consistent with Dashboard
       ),
     );
   }
@@ -180,6 +224,48 @@ class _NewCitaPageState extends State<NewCitaPage> {
     );
   }
 
+  @override
+  void dispose() {
+    platform.invokeMethod('stopPreview');
+    super.dispose();
+  }
+
+  Widget _buildSoundPickerRow(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text('Sonido', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.play_circle_fill, color: Colors.blue, size: 28),
+                onPressed: () => platform.invokeMethod('playPreview', {'uri': _selectedSonido}),
+              ),
+              DropdownButton<String>(
+                value: _selectedSonido,
+                items: _sonidosDisponibles.map((s) => DropdownMenuItem(
+                  value: s['path'],
+                  child: SizedBox(
+                    width: 120,
+                    child: Text(s['nombre']!, style: const TextStyle(fontSize: 14), overflow: TextOverflow.ellipsis),
+                  ),
+                )).toList(),
+                onChanged: (val) {
+                  setState(() => _selectedSonido = val!);
+                  platform.invokeMethod('playPreview', {'uri': val});
+                },
+                underline: const SizedBox(),
+                alignment: Alignment.centerRight,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildGlassStatusCard() {
     return _buildGlassInputCard(
       child: Row(
@@ -226,6 +312,7 @@ class _NewCitaPageState extends State<NewCitaPage> {
           fechaHora: fullDateTime,
           estado: _estado,
           recordatorioActivo: true,
+          sonido: _selectedSonido,
         );
 
         try {
@@ -243,11 +330,12 @@ class _NewCitaPageState extends State<NewCitaPage> {
         }
       },
       style: ElevatedButton.styleFrom(
-        minimumSize: const Size(double.infinity, 64),
+        minimumSize: const Size(double.infinity, 56), // Smaller
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        elevation: 0,
+        elevation: 8, // Added elevation for depth
+        shadowColor: AppColors.primary.withOpacity(0.4),
       ),
       child: Text(
         widget.cita == null ? 'AGENDAR CITA' : 'ACTUALIZAR CITA', 

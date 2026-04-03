@@ -33,6 +33,7 @@ class GlassCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final effectiveBorderRadius = borderRadius ?? BorderRadius.circular(32);
+    final isLight = theme.brightness == Brightness.light;
     
     return Container(
       width: width,
@@ -41,10 +42,10 @@ class GlassCard extends StatelessWidget {
         borderRadius: effectiveBorderRadius,
         boxShadow: shadows ?? [
           BoxShadow(
-            color: theme.colorScheme.primary.withOpacity(0.05),
+            color: isLight ? theme.colorScheme.primary.withOpacity(0.08) : theme.colorScheme.primary.withOpacity(0.05),
             blurRadius: 40,
-            spreadRadius: -10,
-            offset: const Offset(0, 20),
+            spreadRadius: isLight ? 0 : -10,
+            offset: const Offset(0, 15),
           ),
         ],
       ),
@@ -55,10 +56,10 @@ class GlassCard extends StatelessWidget {
           child: Container(
             padding: padding ?? const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: backgroundColor ?? theme.colorScheme.surface.withOpacity(opacity.clamp(0.05, 0.9)),
+              color: backgroundColor ?? (isLight ? Colors.white.withOpacity(0.7) : theme.colorScheme.surface.withOpacity(opacity.clamp(0.05, 0.9))),
               borderRadius: effectiveBorderRadius,
               border: Border.all(
-                color: borderColor ?? (theme.brightness == Brightness.light ? Colors.white.withOpacity(0.5) : Colors.white.withOpacity(0.1)),
+                color: borderColor ?? (isLight ? Colors.black.withOpacity(0.08) : Colors.white.withOpacity(0.1)),
                 width: borderWidth,
               ),
             ),
@@ -69,3 +70,4 @@ class GlassCard extends StatelessWidget {
     );
   }
 }
+

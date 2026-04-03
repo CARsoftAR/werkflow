@@ -30,6 +30,7 @@ class CitaProvider extends ChangeNotifier {
       fechaHora: cita.fechaHora,
       estado: cita.estado,
       recordatorioActivo: cita.recordatorioActivo,
+      sonido: cita.sonido,
     );
     await loadCitas();
     
@@ -68,6 +69,7 @@ class CitaProvider extends ChangeNotifier {
         fechaHora: cita.fechaHora,
         estado: 'Atendida',
         recordatorioActivo: false,
+        sonido: cita.sonido,
       );
       await updateCita(updatedCita);
     }
