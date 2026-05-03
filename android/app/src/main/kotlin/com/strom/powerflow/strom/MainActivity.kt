@@ -11,6 +11,9 @@ import java.io.FileOutputStream
 import android.os.Bundle
 import android.view.WindowManager
 import android.os.Build
+import android.content.Intent
+import android.content.ClipData
+import androidx.core.content.FileProvider
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.werkflow.alarms/sounds"
@@ -58,6 +61,62 @@ class MainActivity: FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.werkflow.whatsapp/direct")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "sendPdfToWhatsApp") {
+                    try {
+                        val phone = call.argument<String>("phone")?.trim()?.replace(Regex("[^0-9]"), "")
+                        val filePath = call.argument<String>("filePath")
+                        val text = call.argument<String>("text") ?: ""
+                        
+                        if (phone.isNullOrEmpty() || filePath.isNullOrEmpty()) {
+                            result.error("BAD_ARGS", "phone y filePath son obligatorios", null)
+                            return@setMethodCallHandler
+                        }
+                        
+                        val file = File(filePath)
+                        val authority = "${applicationContext.packageName}.fileprovider"
+                        val streamUri = FileProvider.getUriForFile(applicationContext, authority, file)
+
+                        fun buildIntent(pkg: String): Intent {
+                            return Intent(Intent.ACTION_SEND).apply {
+                                setPackage(pkg)
+                                type = "application/pdf"
+                                putExtra(Intent.EXTRA_STREAM, streamUri)
+                                putExtra("jid", "$phone@s.whatsapp.net")
+                                if (text.isNotEmpty()) {
+                                    putExtra(Intent.EXTRA_TEXT, text)
+                                }
+                                clipData = ClipData.newRawUri("", streamUri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                        }
+
+                        val pkgs = listOf("com.whatsapp", "com.whatsapp.w4b")
+                        var launched = false
+                        for (pkg in pkgs) {
+                            val intent = buildIntent(pkg)
+                            if (intent.resolveActivity(packageManager) != null) {
+                                startActivity(intent)
+                                launched = true
+                                break
+                            }
+                        }
+
+                        if (launched) {
+                            result.success(true)
+                        } else {
+                            result.error("NO_WHATSAPP", "WhatsApp no instalado", null)
+                        }
+                    } catch (e: Exception) {
+                        result.error("WHATSAPP_ERROR", e.message, null)
+                    }
+                } else {
+                    result.notImplemented()
+                }
+            }
     }
 
     private fun getAlarms(): List<Map<String, String>> {

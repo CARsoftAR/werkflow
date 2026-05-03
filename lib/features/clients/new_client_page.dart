@@ -61,15 +61,12 @@ class _NewClientPageState extends State<NewClientPage> {
                     _buildTextField(_nombreController, 'Nombre y Apellido', Icons.person_rounded, validator: (v) => v!.isEmpty ? 'Requerido' : null),
                     const Divider(height: 1),
                     _buildTextField(_celularController, 'Celular (WhatsApp)', Icons.phone_android_rounded, keyboardType: TextInputType.phone),
+                    const Divider(height: 1),
+                    _buildTextField(_direccionController, 'Dirección', Icons.location_on_rounded),
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
-              _buildSectionHeader('DATOS DE FACTURACIÓN / OBRA'),
-              const SizedBox(height: 16),
-              _buildGlassInputCard(
-                child: _buildTextField(_direccionController, 'CUIT / Dirección', Icons.location_on_rounded),
-              ),
+
               const SizedBox(height: 32),
               _buildSectionHeader('NOTAS TÉCNICAS'),
               const SizedBox(height: 16),

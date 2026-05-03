@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/client_provider.dart';
@@ -9,6 +10,9 @@ import 'new_budget_page.dart';
 import '../settings/business_settings_page.dart';
 import '../../core/services/pdf_service.dart';
 import '../../providers/business_provider.dart';
+import 'package:url_launcher/url_launcher_string.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 
 class BudgetsListPage extends StatefulWidget {
   const BudgetsListPage({super.key});
@@ -18,6 +22,40 @@ class BudgetsListPage extends StatefulWidget {
 }
 
 class _BudgetsListPageState extends State<BudgetsListPage> {
+  static const _whatsappChannel = MethodChannel('com.werkflow.whatsapp/direct');
+
+  Future<void> _shareDirectlyToWhatsApp(String phone, String filePath, String text) async {
+    String cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+    
+    // Si tiene 10 dígitos (ej: 1122334455), agregamos el prefijo de Argentina 549
+    if (cleanPhone.length == 10) {
+      cleanPhone = '549$cleanPhone';
+    } 
+    // Si tiene 11 dígitos y empieza con 15, es formato local, lo corregimos
+    else if (cleanPhone.length == 11 && cleanPhone.startsWith('15')) {
+      cleanPhone = '549${cleanPhone.substring(2)}';
+    }
+    // Si ya empieza con 54 pero le falta el 9 para celular
+    else if (cleanPhone.startsWith('54') && cleanPhone.length == 12 && !cleanPhone.startsWith('549')) {
+      cleanPhone = '549${cleanPhone.substring(2)}';
+    }
+
+    try {
+      await _whatsappChannel.invokeMethod('sendPdfToWhatsApp', {
+        'phone': cleanPhone,
+        'filePath': filePath,
+        'text': text,
+      });
+    } catch (e) {
+      debugPrint("Native WhatsApp failed: $e");
+      // Fallback
+      await Share.shareXFiles(
+        [XFile(filePath)],
+        text: text,
+      );
+    }
+  }
+
   String _activeFilter = 'Todos';
   final List<String> _filters = ['Todos', 'Borrador', 'Enviado', 'Aprobado', 'Terminada', 'Cancelada'];
 
@@ -56,7 +94,7 @@ class _BudgetsListPageState extends State<BudgetsListPage> {
             child: filteredBudgets.isEmpty
                 ? _buildEmptyState(context)
                 : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10).copyWith(bottom: 120),
                     itemCount: filteredBudgets.length,
                     itemBuilder: (context, index) {
                       final budget = filteredBudgets[index];
@@ -66,13 +104,9 @@ class _BudgetsListPageState extends State<BudgetsListPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => NewBudgetPage())),
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
     );
   }
+
 
   Widget _buildFilterBar() {
     return Container(
@@ -251,7 +285,50 @@ class _BudgetsListPageState extends State<BudgetsListPage> {
                         ],
                       ),
                       const Spacer(),
-                       IconButton(
+                      IconButton(
+                        onPressed: () async {
+                          if (client != null) {
+                            showDialog(
+                              context: context, 
+                              barrierDismissible: false,
+                              builder: (context) => const Center(child: CircularProgressIndicator())
+                            );
+                            try {
+                              final business = context.read<BusinessProvider>().businessInfo;
+                              final path = await PdfService.generateBudgetFile(budget, client, business);
+                              
+                              if (mounted) Navigator.pop(context);
+
+                              final phone = client.celular ?? '';
+                              final text = 'Presupuesto de Ñomin Agenda para ${client.nombre}';
+
+                              if (phone.isNotEmpty) {
+                                await _shareDirectlyToWhatsApp(phone, path, text);
+                              } else {
+                                await Share.shareXFiles(
+                                  [XFile(path)],
+                                  text: text,
+                                  subject: 'Presupuesto ${budget.id}',
+                                );
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                                );
+                              }
+                            }
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Error: Generá primero el PDF antes de enviar'), backgroundColor: Colors.red),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.chat_rounded, color: Colors.green),
+                      ),
+
+                      IconButton(
                         onPressed: () async {
                           final business = context.read<BusinessProvider>().businessInfo;
                           if (client != null) {
@@ -275,6 +352,7 @@ class _BudgetsListPageState extends State<BudgetsListPage> {
                         },
                         icon: const Icon(Icons.picture_as_pdf_outlined, color: AppColors.primary),
                       ),
+
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.all(10),

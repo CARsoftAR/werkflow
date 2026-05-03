@@ -22,6 +22,9 @@ class AppColors {
 
   static const Color darkBg = lightBg; 
   static const Color cardDark = cardLight;
+
+
+
   
   // Semantic Colors
   static const Color textDark = Color(0xFF1B1B1E); // Neutral dark grey/black

@@ -11,6 +11,9 @@ import 'providers/budget_provider.dart';
 import 'providers/cita_provider.dart';
 import 'providers/business_provider.dart';
 
+import 'features/main/main_screen.dart';
+import 'features/splash/splash_screen.dart';
+
 class WerkFlowApp extends StatefulWidget {
   const WerkFlowApp({super.key});
 
@@ -55,13 +58,15 @@ class _WerkFlowAppState extends State<WerkFlowApp> {
       ],
       child: MaterialApp(
         navigatorKey: navigatorKey,
-        title: 'WerkFlow',
+        title: 'Ñomin Agenda',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme(),
         darkTheme: AppTheme.darkTheme(),
         themeMode: ThemeMode.system,
-        home: const DashboardPage(),
+        home: const SplashScreen(),
       ),
     );
   }
 }
+
+

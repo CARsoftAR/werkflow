@@ -44,7 +44,7 @@ class _ClientsListPageState extends State<ClientsListPage> {
             child: clients.isEmpty
                 ? _buildEmptyState()
                 : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10).copyWith(bottom: 120),
                     itemCount: clients.length,
                     itemBuilder: (context, index) {
                       final client = clients[index];
@@ -54,13 +54,9 @@ class _ClientsListPageState extends State<ClientsListPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => NewClientPage())),
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.person_add_rounded, color: Colors.white),
-      ),
     );
   }
+
 
   Widget _buildSearchField() {
     return Padding(
@@ -94,33 +90,71 @@ class _ClientsListPageState extends State<ClientsListPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.people_outline_rounded, size: 80, color: Colors.grey.shade300),
-          const SizedBox(height: 24),
-          Text(
+          Container(
+            padding: const EdgeInsets.all(40),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.05),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.people_alt_rounded, size: 80, color: AppColors.primary.withOpacity(0.2)),
+          ),
+          const SizedBox(height: 32),
+          const Text(
             'Sin clientes registrados',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5),
           ),
           const SizedBox(height: 8),
           Text(
-            'Agrega tu primer cliente para empezar.',
-            style: TextStyle(color: Colors.grey.shade500),
+            'Agregá tu primer cliente para empezar.',
+            style: TextStyle(color: Colors.white.withOpacity(0.4), fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 32),
-          ElevatedButton.icon(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => NewClientPage())),
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('NUEVO CLIENTE'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            ),
+          const SizedBox(height: 48),
+          _buildFlowyButton(
+            'AGREGAR CLIENTE',
+            Icons.person_add_rounded,
+            () => Navigator.push(context, MaterialPageRoute(builder: (context) => NewClientPage())),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildFlowyButton(String label, IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          gradient: const LinearGradient(
+            colors: AppColors.sunriseGradient,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withOpacity(0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 0.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   Widget _buildClientCard(BuildContext context, Cliente client) {
     return Padding(

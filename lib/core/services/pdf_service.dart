@@ -5,67 +5,195 @@ import 'package:printing/printing.dart';
 import '../../models/models.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 
 class PdfService {
-  static Future<void> generateAndPrintBudget(Presupuesto budget, Cliente client, BusinessInfo? business) async {
+  static Future<pw.Document> _buildDocument(Presupuesto budget, Cliente client, BusinessInfo? business) async {
+    final pdf = pw.Document();
+    final businessInfo = business ?? BusinessInfo(
+      name: 'Electricista Dante',
+      phone: '1550432855',
+      email: 'info@electricistasur.com',
+      website: 'www.electricistasur.com',
+      address: 'Av. 12 de Octubre 620, Quilmes',
+      footerTitle: 'Términos & y condiciones',
+      footerText: 'Los presupuestos tienen una validez de 15 días desde la emisión del mismo...',
+    );
+
+    pw.Font f900;
+    pw.Font f700;
+    pw.Font f400;
+    
     try {
-      final pdf = pw.Document();
-      final businessInfo = business ?? BusinessInfo(
-        name: 'Electricista Dante',
-        phone: '1550432855',
-        email: 'info@electricistasur.com',
-        website: 'www.electricistasur.com',
-        address: 'Av. 12 de Octubre 620, Quilmes',
-        footerTitle: 'Términos & y condiciones',
-        footerText: 'Los presupuestos tienen una validez de 15 días desde la emisión del mismo...',
-      );
+      f900 = await PdfGoogleFonts.interBlack().timeout(const Duration(seconds: 5));
+      f700 = await PdfGoogleFonts.interBold().timeout(const Duration(seconds: 5));
+      f400 = await PdfGoogleFonts.interRegular().timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint("Font loading failed or timed out: $e");
+      f900 = pw.Font.helveticaBold();
+      f700 = pw.Font.helveticaBold();
+      f400 = pw.Font.helvetica();
+    }
 
-      // Force reliable fonts with fallback
-      pw.Font f900;
-      pw.Font f700;
-      pw.Font f400;
-      
-      try {
-        f900 = await PdfGoogleFonts.interBlack().timeout(const Duration(seconds: 5));
-        f700 = await PdfGoogleFonts.interBold().timeout(const Duration(seconds: 5));
-        f400 = await PdfGoogleFonts.interRegular().timeout(const Duration(seconds: 5));
-      } catch (e) {
-        debugPrint("Font loading failed or timed out: $e");
-        f900 = pw.Font.helveticaBold();
-        f700 = pw.Font.helveticaBold();
-        f400 = pw.Font.helvetica();
-      }
-
-      pw.MemoryImage? headerImage;
-      try {
-        if (businessInfo.headerImagePath != null && businessInfo.headerImagePath!.isNotEmpty) {
-          String path = businessInfo.headerImagePath!;
-          if (path.startsWith('file://')) {
-            path = path.substring(7);
-          }
-          final file = File(path);
-          if (file.existsSync()) {
-            headerImage = pw.MemoryImage(file.readAsBytesSync());
-          }
+    pw.MemoryImage? headerImage;
+    try {
+      if (businessInfo.headerImagePath != null && businessInfo.headerImagePath!.isNotEmpty) {
+        String path = businessInfo.headerImagePath!;
+        if (path.startsWith('file://')) {
+          path = path.substring(7);
         }
-      } catch (e) {
-        debugPrint("Image loading error: $e");
+        final file = File(path);
+        if (file.existsSync()) {
+          headerImage = pw.MemoryImage(file.readAsBytesSync());
+        }
       }
+    } catch (e) {
+      debugPrint("Image loading error: $e");
+    }
 
-      pdf.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(0),
-          footer: (pw.Context context) {
-            return pw.Container(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(0),
+        build: (pw.Context context) {
+          return [
+            // HEADER
+            pw.Container(
+              width: double.infinity,
+              child: pw.Stack(
+                alignment: pw.Alignment.topRight,
+                children: [
+                  if (headerImage != null)
+                    pw.ConstrainedBox(
+                      constraints: const pw.BoxConstraints(maxHeight: 200),
+                      child: pw.Image(headerImage, fit: pw.BoxFit.fitWidth),
+                    )
+                  else
+                    pw.Container(
+                      height: 120,
+                      padding: const pw.EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+                      alignment: pw.Alignment.centerLeft,
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        mainAxisAlignment: pw.MainAxisAlignment.center,
+                        children: [
+                          pw.Text(businessInfo.name, style: pw.TextStyle(font: f900, fontSize: 22)),
+                          pw.SizedBox(height: 4),
+                          pw.Text(businessInfo.address, style: pw.TextStyle(font: f700, fontSize: 10)),
+                          pw.Text(businessInfo.phone, style: pw.TextStyle(font: f700, fontSize: 10)),
+                        ],
+                      ),
+                    ),
+                  
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(40),
+                    child: pw.Text('Presupuesto', style: pw.TextStyle(font: f900, fontSize: 32, color: headerImage != null ? PdfColors.white : PdfColors.black)),
+                  ),
+                ],
+              ),
+            ),
+
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 40, vertical: 30),
+              child: pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('COBRAR A', style: pw.TextStyle(font: f900, fontSize: 14)),
+                        pw.Text(client.nombre, style: pw.TextStyle(font: f700, fontSize: 12)),
+                        if (client.cuitDireccion != null) 
+                          pw.Text(client.cuitDireccion!, style: pw.TextStyle(font: f400, fontSize: 10)),
+                      ],
+                    ),
+                  ),
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        _buildInfoRow('Nº DE PRESUPUESTO', 'EST${budget.id?.toString().padLeft(5, '0') ?? '00000'}', f900, f400),
+                        _buildInfoRow('FECHA', DateFormat('dd/MM/yyyy').format(budget.fecha), f900, f400),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 40),
+              child: pw.Table(
+                border: pw.TableBorder.all(color: PdfColors.grey, width: 0.5),
+                columnWidths: {
+                  0: const pw.FlexColumnWidth(4),
+                  1: const pw.FlexColumnWidth(1),
+                  2: const pw.FlexColumnWidth(1.5),
+                  3: const pw.FlexColumnWidth(1.5),
+                },
+                children: [
+                  pw.TableRow(
+                    decoration: const pw.BoxDecoration(color: PdfColors.black),
+                    children: [
+                      _buildTableCell('Descripción', f900, color: PdfColors.white, padding: 8),
+                      _buildTableCell('CANT.', f900, color: PdfColors.white, padding: 8, align: pw.TextAlign.center),
+                      _buildTableCell('Precio', f900, color: PdfColors.white, padding: 8, align: pw.TextAlign.right),
+                      _buildTableCell('Importe', f900, color: PdfColors.white, padding: 8, align: pw.TextAlign.right),
+                    ],
+                  ),
+                  ...budget.items.map((item) => pw.TableRow(
+                    children: [
+                      _buildTableCell(item.descripcion, f400, padding: 8),
+                      _buildTableCell(item.cantidad.toStringAsFixed(0), f400, padding: 8, align: pw.TextAlign.center),
+                      _buildTableCell('\$${item.precioUnitario.toStringAsFixed(2)}', f400, padding: 8, align: pw.TextAlign.right),
+                      _buildTableCell('\$${item.subtotal.toStringAsFixed(2)}', f400, padding: 8, align: pw.TextAlign.right),
+                    ],
+                  )),
+                ],
+              ),
+            ),
+
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.end,
+                children: [
+                  pw.Container(
+                    width: 250,
+                    child: pw.Row(
+                      children: [
+                        pw.Expanded(
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.all(12),
+                            color: PdfColors.black,
+                            child: pw.Text('TOTAL', style: pw.TextStyle(font: f900, color: PdfColors.white, fontSize: 16)),
+                          ),
+                        ),
+                        pw.Expanded(
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.all(12),
+                            color: PdfColors.black,
+                            alignment: pw.Alignment.centerRight,
+                            child: pw.Text('\$${budget.totalGeneral.toStringAsFixed(2)}', style: pw.TextStyle(font: f900, color: PdfColors.white, fontSize: 16)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 40, vertical: 30),
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Text(businessInfo.footerTitle, style: pw.TextStyle(font: f900, fontSize: 13)),
                   pw.SizedBox(height: 4),
-                  pw.Text(businessInfo.footerText, style: pw.TextStyle(font: f400, fontSize: 9), maxLines: 3),
-                  pw.SizedBox(height: 15),
+                  pw.Text(businessInfo.footerText, style: pw.TextStyle(font: f400, fontSize: 10), maxLines: 4),
+                  pw.SizedBox(height: 20),
                   // DECORATIVE BAR
                   pw.Container(
                     height: 5,
@@ -79,151 +207,37 @@ class PdfService {
                   ),
                 ],
               ),
-            );
-          },
-          build: (pw.Context context) {
-            return [
-              // HEADER
-              pw.Container(
-                width: double.infinity,
-                child: pw.Stack(
-                  alignment: pw.Alignment.topRight,
-                  children: [
-                    if (headerImage != null)
-                      pw.ConstrainedBox(
-                        constraints: const pw.BoxConstraints(maxHeight: 200),
-                        child: pw.Image(headerImage, fit: pw.BoxFit.fitWidth),
-                      )
-                    else
-                      pw.Container(
-                        height: 120,
-                        padding: const pw.EdgeInsets.symmetric(horizontal: 40, vertical: 20),
-                        alignment: pw.Alignment.centerLeft,
-                        child: pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          mainAxisAlignment: pw.MainAxisAlignment.center,
-                          children: [
-                            pw.Text(businessInfo.name, style: pw.TextStyle(font: f900, fontSize: 22)),
-                            pw.SizedBox(height: 4),
-                            pw.Text(businessInfo.address, style: pw.TextStyle(font: f700, fontSize: 10)),
-                            pw.Text(businessInfo.phone, style: pw.TextStyle(font: f700, fontSize: 10)),
-                          ],
-                        ),
-                      ),
-                    
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.all(40),
-                      child: pw.Text('Presupuesto', style: pw.TextStyle(font: f900, fontSize: 32, color: headerImage != null ? PdfColors.white : PdfColors.black)),
-                    ),
-                  ],
-                ),
-              ),
+            ),
+          ];
+        },
+      ),
+    );
+    return pdf;
+  }
 
-              // BODY
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(40),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Row(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Expanded(
-                          child: pw.Column(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              pw.Text('COBRAR A', style: pw.TextStyle(font: f900, fontSize: 14)),
-                              pw.Text(client.nombre, style: pw.TextStyle(font: f700, fontSize: 12)),
-                              if (client.cuitDireccion != null) 
-                                pw.Text(client.cuitDireccion!, style: pw.TextStyle(font: f400, fontSize: 10)),
-                            ],
-                          ),
-                        ),
-                        pw.Expanded(
-                          child: pw.Column(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              _buildInfoRow('Nº DE PRESUPUESTO', 'EST${budget.id?.toString().padLeft(5, '0') ?? '00000'}', f900, f400),
-                              _buildInfoRow('FECHA', DateFormat('dd/MM/yyyy').format(budget.fecha), f900, f400),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    pw.SizedBox(height: 30),
-                    
-                    // Table
-                    pw.Table(
-                      border: pw.TableBorder.all(color: PdfColors.grey, width: 0.5),
-                      columnWidths: {
-                        0: const pw.FlexColumnWidth(4),
-                        1: const pw.FlexColumnWidth(1),
-                        2: const pw.FlexColumnWidth(1.5),
-                        3: const pw.FlexColumnWidth(1.5),
-                      },
-                      children: [
-                        pw.TableRow(
-                          decoration: const pw.BoxDecoration(color: PdfColors.black),
-                          children: [
-                            _buildTableCell('Descripción', f900, color: PdfColors.white, padding: 8),
-                            _buildTableCell('CANT.', f900, color: PdfColors.white, padding: 8, align: pw.TextAlign.center),
-                            _buildTableCell('Precio', f900, color: PdfColors.white, padding: 8, align: pw.TextAlign.right),
-                            _buildTableCell('Importe', f900, color: PdfColors.white, padding: 8, align: pw.TextAlign.right),
-                          ],
-                        ),
-                        ...budget.items.map((item) => pw.TableRow(
-                          children: [
-                            _buildTableCell(item.descripcion, f400, padding: 8),
-                            _buildTableCell(item.cantidad.toStringAsFixed(0), f400, padding: 8, align: pw.TextAlign.center),
-                            _buildTableCell('\$${item.precioUnitario.toStringAsFixed(2)}', f400, padding: 8, align: pw.TextAlign.right),
-                            _buildTableCell('\$${item.subtotal.toStringAsFixed(2)}', f400, padding: 8, align: pw.TextAlign.right),
-                          ],
-                        )),
-                      ],
-                    ),
-                    
-                    pw.Spacer(),
-                    
-                    pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.end,
-                      children: [
-                        pw.Container(
-                          width: 250,
-                          child: pw.Row(
-                            children: [
-                              pw.Expanded(
-                                child: pw.Container(
-                                  padding: const pw.EdgeInsets.all(12),
-                                  color: PdfColors.black,
-                                  child: pw.Text('TOTAL', style: pw.TextStyle(font: f900, color: PdfColors.white, fontSize: 16)),
-                                ),
-                              ),
-                              pw.Expanded(
-                                child: pw.Container(
-                                  padding: const pw.EdgeInsets.all(12),
-                                  color: PdfColors.black,
-                                  alignment: pw.Alignment.centerRight,
-                                  child: pw.Text('\$${budget.totalGeneral.toStringAsFixed(2)}', style: pw.TextStyle(font: f900, color: PdfColors.white, fontSize: 16)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ];
-          },
-        ),
-      );
-
+  static Future<void> generateAndPrintBudget(Presupuesto budget, Cliente client, BusinessInfo? business) async {
+    try {
+      final pdf = await _buildDocument(budget, client, business);
       await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
     } catch (e) {
       throw Exception("Error layout: $e");
     }
   }
+
+  static Future<String> generateBudgetFile(Presupuesto budget, Cliente client, BusinessInfo? business) async {
+    try {
+      final pdf = await _buildDocument(budget, client, business);
+      final bytes = await pdf.save();
+      final directory = await getTemporaryDirectory();
+      final fileName = 'Presupuesto_EST${budget.id ?? "NEW"}.pdf';
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsBytes(bytes);
+      return file.path;
+    } catch (e) {
+      throw Exception("Error saving PDF: $e");
+    }
+  }
+
 
   static pw.Widget _buildInfoRow(String label, String value, pw.Font fontLabel, pw.Font fontValue) {
     return pw.Padding(
